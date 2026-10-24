@@ -1,0 +1,41 @@
+ARNO'S PET TRACKER — THIRD-PARTY NOTICES
+
+Game data tables (data/catalog.json, PetSources.json, MarketItems.json,
+PetAcquisitions.json, FarmingLinks.json)
+  From Pet Tracker by 0Fox2Give, https://github.com/0Fox2Give/PetTracker
+  (revision 55a80c1), distributed there under GPL-3.0-only. They contain game
+  names, identifiers and source relationships assembled from game data,
+  aion2.gaming.tools, aion2maps.com, corpus.gg and observed gameplay. Inclusion
+  grants no rights over third-party material.
+
+Map tiles, spawn data and calibration (assets/maps, data/FarmingSpawns.json)
+  From SkeeveAN/Aion-DPS-Meter, https://github.com/SkeeveAN/Aion-DPS-Meter
+  (revision e16d35d4f19e19b03b0cb05ab4a1658bb51102a6; record in
+  assets/maps/provenance.json), via Pet Tracker. Upstream code and data tooling:
+  MIT, Copyright (c) 2026 SkeeveTV; see licenses/Aion-DPS-Meter-MIT.txt.
+  Map artwork remains the property of NCSOFT and is not licensed as project code.
+  The position message layouts and the map calibration constants used by this
+  program were also studied from that project (2026-10-24).
+
+Pet portraits (assets/portraits) and family crystal icons (assets/crystals)
+  AION 2 game artwork, copyright NCSOFT / NC Corporation, included to identify
+  pets and families, as in Pet Tracker. Crystal icon source:
+  https://aion2petguide.com/guides/soul-crystal-farm (attributed there to
+  https://aion2guidance.com/), converted losslessly from WebP to PNG.
+
+Overlay window rule approach
+  Following taengu/A2Tools-DPS-Meter (GPL-3.0),
+  https://github.com/taengu/A2Tools-DPS-Meter. No code from that project is
+  included; rule keys are KWin's own.
+
+Runtime dependencies (desktop app)
+  Avalonia — MIT (licenses/Avalonia-MIT.txt); MicroCom.Runtime — MIT
+  (licenses/MicroCom-MIT.txt); Tmds.DBus.Protocol — MIT (licenses/Tmds.DBus-MIT.txt);
+  SkiaSharp and HarfBuzzSharp — MIT with native component notices
+  (licenses/SkiaSharp-MIT.txt, licenses/HarfBuzzSharp-MIT.txt,
+  licenses/Skia-HarfBuzz-NOTICES.txt); .NET runtime — MIT with third-party notices
+  (licenses/NET-LICENSE.txt, licenses/NET-NOTICES.txt).
+  libpcap and libcap are provided by the Linux distribution and are not bundled.
+
+Attribution does not establish a license to redistribute game artwork or data.
+See LEGAL.md.

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ArnoA2.Tracker</RootNamespace>
+    <AssemblyName>ArnoA2.Tracker</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Protocol/Protocol.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Research data; see THIRD-PARTY-NOTICES.txt for sources and terms. -->
+    <EmbeddedResource Include="../../data/catalog.json" LogicalName="catalog.json" />
+    <EmbeddedResource Include="../../data/PetSources.json" LogicalName="sources.json" />
+    <EmbeddedResource Include="../../data/MarketItems.json" LogicalName="market.json" />
+    <EmbeddedResource Include="../../data/PetAcquisitions.json" LogicalName="acquisitions.json" />
+    <EmbeddedResource Include="../../data/FarmingLinks.json" LogicalName="links.json" />
+  </ItemGroup>
+</Project>

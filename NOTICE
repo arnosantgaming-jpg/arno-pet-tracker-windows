@@ -1,0 +1,21 @@
+Arno's Pet Tracker
+Copyright (C) 2026 arnosantgaming-jpg and contributors
+
+This program's code, tests and tooling are licensed under the GNU General Public
+License version 3 only (SPDX: GPL-3.0-only). See LICENSE for the full terms.
+Provided without warranty.
+
+This is an independent Linux-first program. The game message formats it reads were
+worked out by others, and its code was written with their work as reference:
+
+  - Pet Tracker by 0Fox2Give (https://github.com/0Fox2Give/PetTracker), GPL-3.0-only:
+    collection, soul, rank, appearance, hit and merchant message layouts, the pet
+    catalog and the creature/merchant/acquisition data tables in data/.
+  - Aion-DPS-Meter by SkeeveAN / SkeeveTV (https://github.com/SkeeveAN/Aion-DPS-Meter),
+    MIT: position, zone, movement and effect layouts, map calibration, map tiles and
+    spawn data.
+  - A2Tools-DPS-Meter by taengu (https://github.com/taengu/A2Tools-DPS-Meter), GPL-3.0:
+    the KDE window-rule approach for overlays above fullscreen games (no code copied).
+
+The GPL grant covers this project's code. It does not cover game artwork, names or
+third-party data; see THIRD-PARTY-NOTICES.txt and LEGAL.md.
