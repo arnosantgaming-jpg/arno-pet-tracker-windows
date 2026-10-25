@@ -22,4 +22,8 @@
     <Content Include="../../assets/crystals/*.png" Link="crystals/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../assets/maps/**/*.jpg" Link="maps/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- Single-file builds: pack a prebuilt capture program inside (tools/build-windows.sh). -->
+  <ItemGroup Condition="'$(EmbedCapture)' != ''">
+    <Content Include="$(EmbedCapture)" Link="capture/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

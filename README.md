@@ -40,8 +40,10 @@ account at risk — read [LEGAL.md](LEGAL.md).
    To have it start by itself, open **Settings → Start with Windows**.
 
 Uninstall it like any app: **Settings → Apps → Arno's Pet Tracker → Uninstall**.
-A portable zip (`arno-pet-tracker-windows.zip`, run `arno-pet-tracker.exe`) is also
-provided for people who prefer not to install.
+Prefer not to install? Download **`ArnoPetTracker-win-x64.exe`** instead: one
+self-contained program, nothing to install, just double-click it (it unpacks itself to a
+private cache folder on first start, so that start takes a few seconds). Npcap is still
+needed.
 
 Run AION 2 in **borderless** or **windowed** mode: Windows keeps "always on top"
 windows above those, and the minimap reader can see the game. In exclusive fullscreen
