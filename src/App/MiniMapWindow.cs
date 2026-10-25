@@ -22,7 +22,8 @@ public sealed class MiniMapWindow : Window
     readonly StackPanel controls = new() { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, IsVisible = false };
     readonly Border opacityPanel;
     readonly GoldSlider opacity = new() { Minimum = 0.2, Maximum = 1, Width = 100, VerticalAlignment = VerticalAlignment.Center };
-    readonly TextBlock guidance = new() { FontSize = 11.5, Foreground = Brushes.White, TextTrimming = TextTrimming.CharacterEllipsis, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+    // Scrolls sideways when the guidance is longer than the label.
+    readonly MarqueeText guidance = new() { FontSize = 11.5, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly Border grip;
     readonly Button shapeButton;
     readonly Border label;

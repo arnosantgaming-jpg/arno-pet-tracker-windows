@@ -94,6 +94,20 @@ Thread.Sleep(200);
 Save(mini, "minimap-rectangle.png");
 Check(maps.Player != null && maps.Region == "verteron", "position placed on Verteron");
 
+// A long guidance line in a narrow mini-map scrolls instead of being cut off.
+mini.Width = 200;
+mini.Height = 230;
+var marquee = mini.GetVisualDescendants().OfType<MarqueeText>().Single();
+marquee.Text = "1038 m NE · Krall Warshaman, Dracuni Herbalist, Forest Spirit";
+for (int i = 0; i < 5; i++)
+    Dispatcher.UIThread.RunJobs();
+Check(marquee.Scrolls && marquee.Bounds.Width <= mini.Width, "long guidance fits the window and scrolls");
+marquee.Advance(1.0);
+Check(marquee.Offset == 0, "guidance holds still while pausing on its start");
+for (int i = 0; i < 30; i++)
+    marquee.Advance(0.05);
+Check(marquee.Offset > 0, "guidance scrolls after its pause");
+Save(mini, "minimap-scrolling.png");
 tracker.OpenFullMap();
 var full = tracker.FullMap!;
 Thread.Sleep(400);
