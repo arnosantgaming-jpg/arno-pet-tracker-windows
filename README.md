@@ -47,6 +47,10 @@ Run AION 2 in **borderless** or **windowed** mode: Windows keeps "always on top"
 windows above those, and the minimap reader can see the game. In exclusive fullscreen
 the overlays may hide behind the game.
 
+VPNs and game boosters such as ExitLag should work: the tracker listens on every adapter,
+including Npcap's loopback adapter, where a booster's local relay hands the game its
+traffic. Keep Npcap's default *"Support loopback traffic"* option ticked.
+
 On first start the tracker imports the original Pet Tracker's saved collection, goals,
 kills and settings from `%LOCALAPPDATA%\PetTracker` (read only). Its own data lives in
 `%LOCALAPPDATA%\arno-pet-tracker`.
@@ -76,7 +80,7 @@ bash tools/build-windows.sh                                   # cross-build from
 
 Both produce `build\win-x64` and `dist\arno-pet-tracker-windows.zip`. The one-click
 installer is made with [Velopack](https://velopack.io) (`dotnet tool install -g vpk`, then
-`bash tools/package-windows.sh 1.0.1`). Checks
+`bash tools/package-windows.sh 1.0.2`). Checks
 (`dotnet run --project tests/ProtocolTests`, `TrackerTests`, `CaptureTests`, `AppTests`)
 run on Windows or Linux; the code base still builds for both.
 

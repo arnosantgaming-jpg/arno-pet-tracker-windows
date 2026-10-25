@@ -80,14 +80,15 @@ string Text(List<StreamEvent> events) => string.Concat(events.Select(e => e is S
     {
         Row4(5, "10.0.0.10", 51638, "193.202.112.199", 13328, 4728), // game, established
         Row4(5, "10.0.0.10", 43162, "20.18.232.167", 443, 4728),     // game, HTTPS
-        Row4(5, "127.0.0.1", 44587, "127.0.0.1", 55466, 4728),       // game, loopback
+        Row4(5, "127.0.0.1", 44587, "127.0.0.1", 55466, 4728),       // game through a local relay
         Row4(2, "0.0.0.0", 13328, "0.0.0.0", 0, 4728),               // listening
         Row4(5, "10.0.0.10", 50000, "193.202.112.199", 13328, 999),  // another process
         Row4(3, "10.0.0.10", 51640, "193.202.112.199", 13328, 4728)  // game, connecting
     };
     var table = BitConverter.GetBytes(rows.Length).Concat(rows.SelectMany(r => r)).ToArray();
     var game = GameConnections.ParseTable4(table, new HashSet<int> { 4728 }).ToArray();
-    Check(game.Length == 2 && game.All(c => c.RemotePort == 13328 && c.Remote.Equals(IPAddress.Parse("193.202.112.199"))) && game[0].LocalPort == 51638, "Windows IPv4 table: only the game's open, non-HTTPS, non-loopback connections");
+    Check(game.Length == 3 && game[0].LocalPort == 51638 && game[0].RemotePort == 13328 && game[1].Remote.Equals(IPAddress.Loopback) && game[1].RemotePort == 55466 && game[2].LocalPort == 51640,
+        "Windows IPv4 table: the game's open, non-HTTPS connections, loopback included (local relays such as ExitLag)");
 
     var row6 = new byte[56];
     IPAddress.Parse("2001:db8::10").GetAddressBytes().CopyTo(row6, 0);

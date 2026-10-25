@@ -77,8 +77,8 @@ public sealed class PacketSource : IDisposable
 
     /// <summary>
     /// Live capture on every interface: Linux's "any" device (one copy of each packet), or on
-    /// Windows each non-loopback adapter (Windows has no "any" device; a packet seen on two
-    /// adapters is a duplicate the reassembler drops). Linux needs CAP_NET_RAW; Npcap's
+    /// Windows each adapter, Npcap's loopback adapter included (Windows has no "any" device; a
+    /// packet seen on two adapters is a duplicate the reassembler drops). Linux needs CAP_NET_RAW; Npcap's
     /// default install lets normal users capture.
     /// </summary>
     public static IReadOnlyList<PacketSource> LiveAll()
@@ -102,7 +102,8 @@ public sealed class PacketSource : IDisposable
         return sources.Count > 0 ? sources : throw new IOException("No network adapter could be opened for capture. " + string.Join("; ", errors));
     }
 
-    /// <summary>Capture devices except loopback, as (name, description).</summary>
+    /// <summary>Capture devices, as (name, description). Loopback is kept: behind a local relay
+    /// (ExitLag and similar) the game's traffic only appears there.</summary>
     static List<(string Name, string Description)> Devices()
     {
         var error = new byte[256];
@@ -116,8 +117,7 @@ public sealed class PacketSource : IDisposable
             {
                 string name = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(at, IntPtr.Size)) ?? "";
                 string description = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(at, 2 * IntPtr.Size)) ?? name;
-                uint flags = (uint)Marshal.ReadInt32(at, 4 * IntPtr.Size);
-                if ((flags & 1) == 0 && name.Length > 0) // PCAP_IF_LOOPBACK
+                if (name.Length > 0)
                     found.Add((name, description));
             }
         }

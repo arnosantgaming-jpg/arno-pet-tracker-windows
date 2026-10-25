@@ -141,7 +141,9 @@ public sealed class GameConnections(string procRoot = "/proc")
                 continue;
             var remote = new IPAddress(row.Slice(12, 4));
             int remotePort = Port(row[16..]);
-            if (IPAddress.IsLoopback(remote) || remotePort == 443)
+            // Loopback stays in: game boosters such as ExitLag route the game through a
+            // local relay, so its game connection goes to 127.0.0.1.
+            if (remotePort == 443)
                 continue;
             yield return new(new IPAddress(row.Slice(4, 4)), Port(row[8..]), remote, remotePort);
         }
@@ -163,7 +165,7 @@ public sealed class GameConnections(string procRoot = "/proc")
             int remotePort = Port(row[44..]);
             if (remote.IsIPv4MappedToIPv6)
                 remote = remote.MapToIPv4();
-            if (IPAddress.IsLoopback(remote) || remotePort == 443)
+            if (remotePort == 443)
                 continue;
             var local = new IPAddress(row[..16]);
             yield return new(local.IsIPv4MappedToIPv6 ? local.MapToIPv4() : local, Port(row[20..]), remote, remotePort);

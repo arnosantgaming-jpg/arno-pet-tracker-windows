@@ -2,7 +2,7 @@
   <PropertyGroup>
     <Product>Arno's Pet Tracker</Product>
     <Authors>arnosantgaming-jpg</Authors>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <Deterministic>true</Deterministic>
     <DebugType>none</DebugType>
     <NuGetAudit>true</NuGetAudit>

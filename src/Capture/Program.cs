@@ -64,8 +64,9 @@ sealed class Daemon(Options options)
         {
             if (!offline && OperatingSystem.IsLinux())
                 Privileges.DropAll();
-            // Incoming TCP only; HTTPS and loopback can never be the game connection.
-            const string filter = "tcp and not port 443 and not net 127.0.0.0/8";
+            // Incoming TCP only; HTTPS can never be the game connection. Loopback is the game
+            // connection on Windows behind a local relay (ExitLag and similar boosters).
+            string filter = OperatingSystem.IsWindows() ? "tcp and not port 443" : "tcp and not port 443 and not net 127.0.0.0/8";
             foreach (var source in sources)
             {
                 try
