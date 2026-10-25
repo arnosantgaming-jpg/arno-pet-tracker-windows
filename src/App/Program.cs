@@ -13,6 +13,9 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Lets the Windows installer run its install/uninstall steps; returns at once otherwise.
+        if (OperatingSystem.IsWindows())
+            Velopack.VelopackApp.Build().Run();
         // One tracker per user: a second start just exits.
         string lockPath = Path.Combine(Path.GetDirectoryName(ArnoA2.Protocol.CaptureChannel.DefaultPath())!, "app.lock");
         Directory.CreateDirectory(Path.GetDirectoryName(lockPath)!);

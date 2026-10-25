@@ -12,6 +12,8 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <!-- Windows installer hooks (install, uninstall, updates); MIT. -->
+    <PackageReference Include="Velopack" Version="1.2.161" />
     <ProjectReference Include="../Tracker/Tracker.csproj" />
   </ItemGroup>
   <ItemGroup>
