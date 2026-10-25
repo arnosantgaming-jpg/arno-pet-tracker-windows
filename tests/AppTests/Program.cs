@@ -107,6 +107,10 @@ Check(marquee.Offset == 0, "guidance holds still while pausing on its start");
 for (int i = 0; i < 30; i++)
     marquee.Advance(0.05);
 Check(marquee.Offset > 0, "guidance scrolls after its pause");
+double scrolled = marquee.Offset;
+marquee.Text = "1037 m NE · Krall Warshaman, Dracuni Herbalist, Forest Spirit";
+marquee.Advance(0.05);
+Check(marquee.Offset > scrolled, "guidance keeps scrolling when its distance changes");
 Save(mini, "minimap-scrolling.png");
 tracker.OpenFullMap();
 var full = tracker.FullMap!;

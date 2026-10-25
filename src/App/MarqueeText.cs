@@ -50,10 +50,10 @@ public sealed class MarqueeText : Control
             value ??= "";
             if (value == text)
                 return;
+            // The scroll carries on: the guidance changes with every step (its distance),
+            // and restarting each time would keep it parked on the start forever.
             text = value;
             format = null;
-            offset = waited = 0;
-            atEnd = false;
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -78,6 +78,7 @@ public sealed class MarqueeText : Control
             return;
         }
 
+        offset = Math.Min(offset, Overflow);
         if (waited < Pause)
         {
             waited += dt;
