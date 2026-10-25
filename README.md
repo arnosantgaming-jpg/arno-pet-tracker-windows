@@ -76,7 +76,7 @@ bash tools/build-windows.sh                                   # cross-build from
 
 Both produce `build\win-x64` and `dist\arno-pet-tracker-windows.zip`. The one-click
 installer is made with [Velopack](https://velopack.io) (`dotnet tool install -g vpk`, then
-`bash tools/package-windows.sh 0.1.0`). Checks
+`bash tools/package-windows.sh 1.0.1`). Checks
 (`dotnet run --project tests/ProtocolTests`, `TrackerTests`, `CaptureTests`, `AppTests`)
 run on Windows or Linux; the code base still builds for both.
 
