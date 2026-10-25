@@ -144,7 +144,7 @@ public sealed class AppState
 
         if (daemon is { HasExited: false })
             daemon.Kill();
-        var start = new ProcessStartInfo(daemonPath!) { UseShellExecute = false, RedirectStandardError = true };
+        var start = new ProcessStartInfo(daemonPath!) { UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
         start.ArgumentList.Add("--parent");
         start.ArgumentList.Add(Environment.ProcessId.ToString());
         daemon = Process.Start(start) ?? throw new IOException("The capture program did not start.");
@@ -153,7 +153,8 @@ public sealed class AppState
             if (daemon.HasExited)
             {
                 string error = (await daemon.StandardError.ReadToEndAsync(cancel)).Trim();
-                throw new IOException(error.Contains("cap_net_raw", StringComparison.Ordinal) || error.Contains("ermission", StringComparison.Ordinal)
+                throw new IOException(error.Contains("Npcap", StringComparison.Ordinal) ? error.Replace("arnoa2-capture: ", "")
+                    : OperatingSystem.IsLinux() && (error.Contains("cap_net_raw", StringComparison.Ordinal) || error.Contains("ermission", StringComparison.Ordinal))
                     ? "Capture needs permission. Open Settings → Capture → Grant permission."
                     : "The capture program stopped: " + error);
             }

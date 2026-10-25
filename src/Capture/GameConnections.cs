@@ -1,5 +1,8 @@
+using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Runtime.InteropServices;
 
 namespace ArnoA2.Capture;
 
@@ -26,6 +29,8 @@ public sealed class GameConnections(string procRoot = "/proc")
 
     public IReadOnlyList<Connection> Scan()
     {
+        if (OperatingSystem.IsWindows())
+            return ScanWindows();
         var pids = new List<int>();
         var inodes = new HashSet<ulong>();
         foreach (string directory in Directory.EnumerateDirectories(procRoot))
@@ -61,6 +66,111 @@ public sealed class GameConnections(string procRoot = "/proc")
 
         return found.Distinct().ToArray();
     }
+
+    // --- Windows: the TCP tables with owning process ids (iphlpapi) -------------------
+
+    [DllImport("iphlpapi.dll")]
+    static extern uint GetExtendedTcpTable(IntPtr table, ref int size, bool sort, int family, int tableClass, uint reserved);
+    const int AfInet = 2, AfInet6 = 23, TcpTableOwnerPidAll = 5;
+
+    IReadOnlyList<Connection> ScanWindows()
+    {
+        var pids = new HashSet<int>();
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+                if (GameNames.Contains(process.ProcessName.ToLowerInvariant() + ".exe"))
+                    pids.Add(process.Id);
+        }
+
+        Processes = pids.ToArray();
+        if (pids.Count == 0)
+            return Array.Empty<Connection>();
+        var found = new List<Connection>();
+        if (Table(AfInet) is { } v4)
+            found.AddRange(ParseTable4(v4, pids));
+        if (Table(AfInet6) is { } v6)
+            found.AddRange(ParseTable6(v6, pids));
+        return found.Distinct().ToArray();
+    }
+
+    static byte[]? Table(int family)
+    {
+        int size = 0;
+        GetExtendedTcpTable(IntPtr.Zero, ref size, false, family, TcpTableOwnerPidAll, 0);
+        for (int attempt = 0; attempt < 3 && size > 0; attempt++)
+        {
+            var buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                int request = size;
+                uint result = GetExtendedTcpTable(buffer, ref request, false, family, TcpTableOwnerPidAll, 0);
+                if (result == 0)
+                {
+                    var bytes = new byte[request];
+                    Marshal.Copy(buffer, bytes, 0, request);
+                    return bytes;
+                }
+
+                size = request + 1024; // the table grew between calls
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+
+        return null;
+    }
+
+    // MIB_TCP_STATE: 3 SYN sent, 5 established.
+    static bool Open(uint state) => state is 3 or 5;
+    static int Port(ReadOnlySpan<byte> dword) => BinaryPrimitives.ReadUInt16BigEndian(dword);
+
+    /// <summary>MIB_TCPTABLE_OWNER_PID: count, then rows of state, local addr, local port,
+    /// remote addr, remote port, pid (six DWORDs; addresses and ports in network order).</summary>
+    public static IEnumerable<Connection> ParseTable4(byte[] table, IReadOnlySet<int> pids)
+    {
+        int count = BinaryPrimitives.ReadInt32LittleEndian(table);
+        for (int i = 0; i < count && 4 + (i + 1) * 24 <= table.Length; i++)
+        {
+            var row = table.AsSpan(4 + i * 24, 24);
+            uint state = BinaryPrimitives.ReadUInt32LittleEndian(row);
+            int pid = BinaryPrimitives.ReadInt32LittleEndian(row[20..]);
+            if (!Open(state) || !pids.Contains(pid))
+                continue;
+            var remote = new IPAddress(row.Slice(12, 4));
+            int remotePort = Port(row[16..]);
+            if (IPAddress.IsLoopback(remote) || remotePort == 443)
+                continue;
+            yield return new(new IPAddress(row.Slice(4, 4)), Port(row[8..]), remote, remotePort);
+        }
+    }
+
+    /// <summary>MIB_TCP6TABLE_OWNER_PID rows: local addr[16], scope, port, remote addr[16],
+    /// scope, port, state, pid (56 bytes).</summary>
+    public static IEnumerable<Connection> ParseTable6(byte[] table, IReadOnlySet<int> pids)
+    {
+        int count = BinaryPrimitives.ReadInt32LittleEndian(table);
+        for (int i = 0; i < count && 4 + (i + 1) * 56 <= table.Length; i++)
+        {
+            var row = table.AsSpan(4 + i * 56, 56);
+            uint state = BinaryPrimitives.ReadUInt32LittleEndian(row[48..]);
+            int pid = BinaryPrimitives.ReadInt32LittleEndian(row[52..]);
+            if (!Open(state) || !pids.Contains(pid))
+                continue;
+            var remote = new IPAddress(row.Slice(24, 16));
+            int remotePort = Port(row[44..]);
+            if (remote.IsIPv4MappedToIPv6)
+                remote = remote.MapToIPv4();
+            if (IPAddress.IsLoopback(remote) || remotePort == 443)
+                continue;
+            var local = new IPAddress(row[..16]);
+            yield return new(local.IsIPv4MappedToIPv6 ? local.MapToIPv4() : local, Port(row[20..]), remote, remotePort);
+        }
+    }
+
+    // --- Linux: procfs ---------------------------------------------------------------
 
     /// <summary>argv[0], or argv[1] behind a Wine loader, names the game executable.</summary>
     public static bool IsGame(ReadOnlySpan<byte> cmdline)

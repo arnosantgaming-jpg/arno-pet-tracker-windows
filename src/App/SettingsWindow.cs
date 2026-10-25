@@ -59,19 +59,28 @@ public sealed class SettingsWindow : Window
 
         panel.Children.Add(Ui.Heading("Capture"));
         panel.Children.Add(captureNote);
-        string daemon = Path.Combine(AppContext.BaseDirectory, "capture", "arnoa2-capture");
-        panel.Children.Add(Ui.Button("Grant capture permission", async () =>
+        if (OperatingSystem.IsWindows())
         {
-            captureNote.Text = "Waiting for the password dialog…";
-            try
+            panel.Children.Add(Ui.Note("Capture uses Npcap. Install it from npcap.com with its default options (leave \"Restrict Npcap driver's access to Administrators only\" unticked), then restart the tracker."));
+            panel.Children.Add(Ui.Button("Open npcap.com", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://npcap.com/#download") { UseShellExecute = true })?.Dispose()));
+        }
+        else
+        {
+            string daemon = Path.Combine(AppContext.BaseDirectory, "capture", "arnoa2-capture");
+            panel.Children.Add(Ui.Button("Grant capture permission", async () =>
             {
-                captureNote.Text = await AppState.GrantPermission(daemon);
-            }
-            catch (Exception ex)
-            {
-                captureNote.Text = "Could not grant: " + ex.Message;
-            }
-        }, "Gives the capture program (only) permission to read network packets; asks for your password"));
+                captureNote.Text = "Waiting for the password dialog…";
+                try
+                {
+                    captureNote.Text = await AppState.GrantPermission(daemon);
+                }
+                catch (Exception ex)
+                {
+                    captureNote.Text = "Could not grant: " + ex.Message;
+                }
+            }, "Gives the capture program (only) permission to read network packets; asks for your password"));
+        }
+
         if (KdeWindowRules.Available)
         {
             var kdeNote = Ui.Note("");

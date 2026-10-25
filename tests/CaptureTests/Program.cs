@@ -62,6 +62,44 @@ string Text(List<StreamEvent> events) => string.Concat(events.Select(e => e is S
     Check(found.Length == 1 && found[0].RemotePort == 13328 && found[0].Remote.Equals(IPAddress.Parse("193.202.112.199")), "only the game's open, non-HTTPS, non-loopback connection");
 }
 
+// --- Windows TCP tables (layout of MIB_TCP(6)TABLE_OWNER_PID) ------------------
+{
+    static byte[] Row4(uint state, string local, int localPort, string remote, int remotePort, int pid)
+    {
+        var row = new byte[24];
+        BitConverter.TryWriteBytes(row.AsSpan(0), state);
+        IPAddress.Parse(local).GetAddressBytes().CopyTo(row, 4);
+        row[8] = (byte)(localPort >> 8); row[9] = (byte)localPort;
+        IPAddress.Parse(remote).GetAddressBytes().CopyTo(row, 12);
+        row[16] = (byte)(remotePort >> 8); row[17] = (byte)remotePort;
+        BitConverter.TryWriteBytes(row.AsSpan(20), pid);
+        return row;
+    }
+
+    var rows = new[]
+    {
+        Row4(5, "10.0.0.10", 51638, "193.202.112.199", 13328, 4728), // game, established
+        Row4(5, "10.0.0.10", 43162, "20.18.232.167", 443, 4728),     // game, HTTPS
+        Row4(5, "127.0.0.1", 44587, "127.0.0.1", 55466, 4728),       // game, loopback
+        Row4(2, "0.0.0.0", 13328, "0.0.0.0", 0, 4728),               // listening
+        Row4(5, "10.0.0.10", 50000, "193.202.112.199", 13328, 999),  // another process
+        Row4(3, "10.0.0.10", 51640, "193.202.112.199", 13328, 4728)  // game, connecting
+    };
+    var table = BitConverter.GetBytes(rows.Length).Concat(rows.SelectMany(r => r)).ToArray();
+    var game = GameConnections.ParseTable4(table, new HashSet<int> { 4728 }).ToArray();
+    Check(game.Length == 2 && game.All(c => c.RemotePort == 13328 && c.Remote.Equals(IPAddress.Parse("193.202.112.199"))) && game[0].LocalPort == 51638, "Windows IPv4 table: only the game's open, non-HTTPS, non-loopback connections");
+
+    var row6 = new byte[56];
+    IPAddress.Parse("2001:db8::10").GetAddressBytes().CopyTo(row6, 0);
+    row6[20] = 0xC9; row6[21] = 0xB6;
+    IPAddress.Parse("2001:db8::99").GetAddressBytes().CopyTo(row6, 24);
+    row6[44] = 0x34; row6[45] = 0x10;
+    BitConverter.TryWriteBytes(row6.AsSpan(48), 5u);
+    BitConverter.TryWriteBytes(row6.AsSpan(52), 4728);
+    var six = GameConnections.ParseTable6(BitConverter.GetBytes(1).Concat(row6).ToArray(), new HashSet<int> { 4728 }).ToArray();
+    Check(six.Length == 1 && six[0].RemotePort == 13328 && six[0].LocalPort == 0xC9B6 && six[0].Remote.Equals(IPAddress.Parse("2001:db8::99")), "Windows IPv6 table row");
+}
+
 // --- End to end -------------------------------------------------------------------
 if (args.Length >= 3)
 {

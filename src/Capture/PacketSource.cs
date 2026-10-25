@@ -14,7 +14,10 @@ public readonly record struct Segment(DateTimeOffset Time, IPAddress Source, int
 /// </summary>
 public sealed class PacketSource : IDisposable
 {
-    const string Lib = "libpcap.so.1";
+    // Resolved per system: libpcap on Linux, Npcap's wpcap.dll on Windows.
+    const string Lib = "pcap";
+    [DllImport(Lib)] static extern int pcap_findalldevs(out IntPtr devices, byte[] error);
+    [DllImport(Lib)] static extern void pcap_freealldevs(IntPtr devices);
     [DllImport(Lib)] static extern IntPtr pcap_create(string source, byte[] error);
     [DllImport(Lib)] static extern IntPtr pcap_open_offline(string path, byte[] error);
     [DllImport(Lib)] static extern int pcap_set_snaplen(IntPtr p, int snaplen);
@@ -39,8 +42,25 @@ public sealed class PacketSource : IDisposable
         public IntPtr Instructions;
     }
 
+    static PacketSource() => NativeLibrary.SetDllImportResolver(typeof(PacketSource).Assembly, (name, assembly, path) =>
+    {
+        if (name != Lib)
+            return IntPtr.Zero;
+        if (OperatingSystem.IsWindows())
+        {
+            // Npcap installs wpcap.dll in System32\Npcap unless "WinPcap compatible mode" was chosen.
+            string npcap = Path.Combine(Environment.SystemDirectory, "Npcap", "wpcap.dll");
+            if (NativeLibrary.TryLoad(npcap, out var found) || NativeLibrary.TryLoad("wpcap.dll", out found))
+                return found;
+            throw new DllNotFoundException("Npcap is not installed. Install it from https://npcap.com/ and restart the tracker.");
+        }
+
+        return NativeLibrary.TryLoad("libpcap.so.1", out var lib) || NativeLibrary.TryLoad("libpcap.so", out lib) ? lib : IntPtr.Zero;
+    });
+
     IntPtr handle;
     readonly int link;
+    public string Device { get; init; } = "";
     public bool Offline { get; }
 
     PacketSource(IntPtr handle, bool offline)
@@ -55,11 +75,64 @@ public sealed class PacketSource : IDisposable
         }
     }
 
-    /// <summary>Opens live capture on all interfaces. Needs CAP_NET_RAW.</summary>
-    public static PacketSource Live()
+    /// <summary>
+    /// Live capture on every interface: Linux's "any" device (one copy of each packet), or on
+    /// Windows each non-loopback adapter (Windows has no "any" device; a packet seen on two
+    /// adapters is a duplicate the reassembler drops). Linux needs CAP_NET_RAW; Npcap's
+    /// default install lets normal users capture.
+    /// </summary>
+    public static IReadOnlyList<PacketSource> LiveAll()
+    {
+        if (!OperatingSystem.IsWindows())
+            return new[] { Live("any") };
+        var sources = new List<PacketSource>();
+        var errors = new List<string>();
+        foreach (var (name, description) in Devices())
+        {
+            try
+            {
+                sources.Add(Live(name));
+            }
+            catch (IOException ex)
+            {
+                errors.Add(description + ": " + ex.Message);
+            }
+        }
+
+        return sources.Count > 0 ? sources : throw new IOException("No network adapter could be opened for capture. " + string.Join("; ", errors));
+    }
+
+    /// <summary>Capture devices except loopback, as (name, description).</summary>
+    static List<(string Name, string Description)> Devices()
     {
         var error = new byte[256];
-        var p = pcap_create("any", error);
+        if (pcap_findalldevs(out var list, error) != 0)
+            throw new IOException(Text(error));
+        var found = new List<(string, string)>();
+        try
+        {
+            // struct pcap_if { pcap_if* next; char* name; char* description; pcap_addr* addresses; bpf_u_int32 flags; }
+            for (var at = list; at != IntPtr.Zero; at = Marshal.ReadIntPtr(at))
+            {
+                string name = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(at, IntPtr.Size)) ?? "";
+                string description = Marshal.PtrToStringUTF8(Marshal.ReadIntPtr(at, 2 * IntPtr.Size)) ?? name;
+                uint flags = (uint)Marshal.ReadInt32(at, 4 * IntPtr.Size);
+                if ((flags & 1) == 0 && name.Length > 0) // PCAP_IF_LOOPBACK
+                    found.Add((name, description));
+            }
+        }
+        finally
+        {
+            pcap_freealldevs(list);
+        }
+
+        return found;
+    }
+
+    static PacketSource Live(string device)
+    {
+        var error = new byte[256];
+        var p = pcap_create(device, error);
         if (p == IntPtr.Zero)
             throw new IOException(Text(error));
         pcap_set_snaplen(p, 65535);
@@ -72,10 +145,14 @@ public sealed class PacketSource : IDisposable
         {
             string message = Marshal.PtrToStringUTF8(pcap_geterr(p)) ?? "pcap_activate failed";
             pcap_close(p);
-            throw new IOException(status == -8 ? "Permission denied: the capture program needs cap_net_raw (" + message + ")" : message);
+            if (status == -8)
+                message = OperatingSystem.IsWindows()
+                    ? "Permission denied: Npcap was installed with \"Restrict Npcap driver's access to Administrators only\". Reinstall Npcap without that option. (" + message + ")"
+                    : "Permission denied: the capture program needs cap_net_raw (" + message + ")";
+            throw new IOException(message);
         }
 
-        return new(p, offline: false);
+        return new(p, offline: false) { Device = device };
     }
 
     public static PacketSource File(string path)
@@ -119,8 +196,22 @@ public sealed class PacketSource : IDisposable
         if (result < 0)
             throw new IOException(Marshal.PtrToStringUTF8(pcap_geterr(handle)) ?? "Capture failed");
         // struct pcap_pkthdr { struct timeval ts; bpf_u_int32 caplen; bpf_u_int32 len; } (LP64)
-        long seconds = Marshal.ReadInt64(header), micros = Marshal.ReadInt64(header, 8);
-        int captured = Marshal.ReadInt32(header, 16);
+        // struct pcap_pkthdr { struct timeval ts; bpf_u_int32 caplen; bpf_u_int32 len; }:
+        // timeval fields are 64-bit on Linux (LP64) but 32-bit on Windows (LLP64).
+        long seconds, micros;
+        int captured;
+        if (OperatingSystem.IsWindows())
+        {
+            seconds = (uint)Marshal.ReadInt32(header);
+            micros = Marshal.ReadInt32(header, 4);
+            captured = Marshal.ReadInt32(header, 8);
+        }
+        else
+        {
+            seconds = Marshal.ReadInt64(header);
+            micros = Marshal.ReadInt64(header, 8);
+            captured = Marshal.ReadInt32(header, 16);
+        }
         var bytes = new byte[captured];
         Marshal.Copy(data, bytes, 0, captured);
         var time = DateTimeOffset.FromUnixTimeSeconds(seconds).AddTicks(micros * 10);

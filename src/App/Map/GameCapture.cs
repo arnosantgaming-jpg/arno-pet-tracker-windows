@@ -2,13 +2,29 @@ using System.Runtime.InteropServices;
 
 namespace ArnoA2.App.Map;
 
+/// <summary>Reads a rectangle of the game window's pixels (the minimap corner).</summary>
+public interface IGameCapture : IDisposable
+{
+    bool Available { get; }
+    /// <summary>Client-area size of the game window, once found.</summary>
+    (int Width, int Height)? Size { get; }
+    bool Find();
+    /// <summary>RGB bytes of the rectangle (client coordinates), or null when the window is gone.</summary>
+    byte[]? Read(int x, int y, int width, int height);
+}
+
+public static class GameCapture
+{
+    public static IGameCapture Create() => OperatingSystem.IsWindows() ? new WindowsGameCapture() : new X11GameCapture();
+}
+
 /// <summary>
 /// Reads a small rectangle of the AION 2 window through X11 (the game runs under XWayland
 /// with Proton). Only the minimap corner is copied, about 0.4 ms per grab at 1080p. It reads
 /// pixels the game has already drawn; nothing is injected into or read from the game process.
 /// Not thread-safe: use one instance from one thread.
 /// </summary>
-public sealed class GameCapture : IDisposable
+public sealed class X11GameCapture : IGameCapture
 {
     const string Lib = "libX11.so.6";
     [DllImport(Lib)] static extern IntPtr XOpenDisplay(IntPtr name);
@@ -39,7 +55,7 @@ public sealed class GameCapture : IDisposable
     }
 
     IntPtr display, window;
-    public GameCapture()
+    public X11GameCapture()
     {
         display = XOpenDisplay(IntPtr.Zero);
         lock (ours)

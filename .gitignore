@@ -9,3 +9,4 @@
 *.key
 # Local copy of the original project, if present.
 /PetTracker/
+/dist/

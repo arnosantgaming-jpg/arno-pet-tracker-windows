@@ -1,10 +1,14 @@
-# Arno's Pet Tracker
+# Arno's Pet Tracker — Windows
 
-A Linux-first companion for **AION 2** pet farming: your pet ranks and soul totals,
-what you are farming right now, and where to go next on a live map.
+The Windows port of [Arno's Pet Tracker](https://github.com/arnosantgaming-jpg/arno-pet-tracker),
+a companion for **AION 2** pet farming: your pet ranks and soul totals, what you are
+farming right now, and where to go next on a live map.
 
-> **Tested only on CachyOS** (KDE Plasma 6, Wayland session, AION 2 through
-> Steam/Proton, NVIDIA GPU). Other distributions, desktops and Wine setups are untested.
+> **Untested on Windows.** This port builds and passes all shared tests, and its
+> Windows capture code has been exercised under Wine, but it has not yet been run on a
+> real Windows PC with the game. Please report what works and what doesn't
+> ([TESTING.md](TESTING.md)). Linux players: use the
+> [Linux repo](https://github.com/arnosantgaming-jpg/arno-pet-tracker).
 
 Unofficial and not affiliated with NCSOFT. Using third-party tools can put your game
 account at risk — read [LEGAL.md](LEGAL.md).
@@ -12,76 +16,64 @@ account at risk — read [LEGAL.md](LEGAL.md).
 ## What it does
 
 - **Collection:** every pet's rank and souls toward the next rank, exact while the
-  game stream is continuous, clearly marked "last known" otherwise.
+  game stream is continuous, marked "last known" (≈) otherwise.
 - **Tracker overlay:** pets you just earned souls for (Recent) or whose creatures are
   around you (Nearby), pinned pets on top, farming goals and session stats.
 - **Black Cloud Merchant:** offers worth buying for pets you have not maxed.
 - **Live map:** a mini-map (circle or rectangle) and a full map (Verteron, Altgard)
   with your position, pet spawns and the best farming spots for what you still need.
-  Your position comes from the in-game minimap when it is visible (about 2 m), exact
-  server positions after skills and hits, or a steady estimate from nearby creatures.
-- **No relog needed:** started mid-session it recognises your character from game
-  traffic; one login with the tracker running syncs exact soul totals.
+- **No relog needed:** started mid-session it recognises your character; one login
+  with the tracker running syncs exact soul totals.
 
-## Install (CachyOS / Arch)
+## Install
 
-```sh
-sudo pacman -S --needed git libpcap libcap fontconfig libx11
-# .NET SDK 10.0.4xx into your home folder (build tool only):
-curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
-bash /tmp/dotnet-install.sh --version 10.0.401 --install-dir ~/.dotnet
-git clone https://github.com/arnosantgaming-jpg/arno-pet-tracker.git
-cd arno-pet-tracker
-bash tools/build.sh
-bash tools/install.sh        # asks for your password once; add --no-autostart to skip login start
+1. Install **[Npcap](https://npcap.com/#download)** with its default options. Leave
+   *"Restrict Npcap driver's access to Administrators only"* unticked, or the tracker
+   cannot capture without running as administrator.
+2. Download `arno-pet-tracker-windows.zip` from the
+   [latest release](https://github.com/arnosantgaming-jpg/arno-pet-tracker-windows/releases)
+   and unzip it. Windows may warn that the program is unsigned.
+3. In the unzipped `win-x64` folder, right-click `install.ps1` → **Run with PowerShell**
+   (or `powershell -ExecutionPolicy Bypass -File .\install.ps1`). It installs to
+   `%LOCALAPPDATA%\Programs\arno-pet-tracker`, adds a Start menu entry and starts the
+   tracker with Windows (`-NoAutostart` to skip). No administrator rights needed. You
+   can also just run `arno-pet-tracker.exe` from the folder.
+4. Start **Arno's Pet Tracker** before logging into your character.
+
+Run AION 2 in **borderless** or **windowed** mode: Windows keeps "always on top"
+windows above those, and the minimap reader can see the game. In exclusive fullscreen
+the overlays may hide behind the game.
+
+On first start the tracker imports the original Pet Tracker's saved collection, goals,
+kills and settings from `%LOCALAPPDATA%\PetTracker` (read only). Its own data lives in
+`%LOCALAPPDATA%\arno-pet-tracker`.
+
+## How it works on Windows
+
+| Part | Windows |
+| --- | --- |
+| Capture (`capture\arnoa2-capture.exe`) | Npcap on every non-loopback adapter; finds the game's connections in Windows' TCP table (owning process `AION2` / `AION2-Win64-Shipping`); forwards the incoming game stream, in order, to the app over a private local socket. No decoding. |
+| Decoding and tracking | Shared with the Linux version, unchanged |
+| Minimap reading | Copies the game's minimap corner from the screen (GDI); needs the game visible in borderless or windowed mode, and our own mini-map not placed over the game's minimap |
+
+It only reads the game's incoming network traffic and, for the map, screen pixels. It
+never reads or changes game memory and never sends anything to the game.
+
+## Build from source
+
+Needs the .NET SDK 10.0.4xx (`global.json`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build.ps1     # on Windows
 ```
 
-Then start **Arno's Pet Tracker** from the menu before logging into your character.
-On KDE, **Settings → Keep tracker and mini-map above the game** keeps the overlays
-above a fullscreen game. Update with `git pull && bash tools/build.sh && bash tools/install.sh`.
-On first start it imports the original Pet Tracker's saved collection, goals, kills and
-settings from `~/.local/share/PetTracker` (read only). Its own data lives in
-`~/.local/share/arno-pet-tracker`.
-
-## How it works
-
-| Part | Role | Privileges |
-| --- | --- | --- |
-| [`src/Capture`](src/Capture) `arnoa2-capture` | Finds the game connection through `/proc`, captures its incoming TCP stream with libpcap, puts it back in order and forwards the bytes over an owner-only Unix socket. No decoding. | `cap_net_raw` (file capability), dropped on the capture thread once the handle is open |
-| [`src/Protocol`](src/Protocol) | Framing, LZ4 bundles, one typed decoder per game message | none |
-| [`src/Tracker`](src/Tracker) | Pet ledger, kills, Recent/Nearby, pins, goals, session, merchant, storage | none |
-| [`src/App`](src/App) `arno-pet-tracker` | Tracker overlay, mini-map, full map, pet finder with session stats, settings; reads the daemon's socket and the in-game minimap | none |
-
-It only reads the game's incoming network traffic (and, for the map, the pixels of
-the in-game minimap). It never reads or changes game memory and never sends anything
-to the game. The client's own outgoing traffic is encrypted and not used.
-
-**Soul ledger.** Each pet has a rank, a soul balance and a certainty. At login the
-game sends the whole collection; after that, balance = login value + gains − spends,
-in whatever order the messages arrive, and a rank-2 pet reaching 75 becomes max by
-itself. Any capture gap turns balances into "last known" (shown with ≈) until the
-next login.
-
-## Build and check
-
-Needs the .NET SDK 10.0.4xx (see `global.json`) and `libpcap`.
-
 ```sh
-dotnet run --project tests/ProtocolTests
-dotnet run --project tests/TrackerTests
-dotnet run --project tests/CaptureTests
-dotnet run --project tests/AppTests -- test-results/app   # renders every window
-# With a capture of your own game session (keep it private):
-dotnet run --project tools/Replay -c Release -- --tracker ~/path/to/recording.pcap
-# Live, next to the running game (asks for your password once for cap_net_raw):
-bash tools/try-live-capture.sh 60
+bash tools/build-windows.sh                                   # cross-build from Linux
 ```
 
-Status of the checks when the core was written (2026-10-24), against the original
-Pet Tracker's decoders and engine on two real recordings (~17,000 frames): identical
-frames and messages, and the same final state for all 305 pets (ranks, trusted
-balances, kills, session souls). A live 60-second run beside the game: 3,425 frames,
-0 faults, 0 gaps, login collection captured.
+Both produce `build\win-x64` and `dist\arno-pet-tracker-windows.zip`. Checks
+(`dotnet run --project tests/ProtocolTests`, `TrackerTests`, `CaptureTests`, `AppTests`)
+run on Windows or Linux; the code base still builds for both.
 
 ## Credits
 
@@ -93,13 +85,11 @@ work as reference:
   creature, merchant and acquisition data.
 - **[SkeeveAN/Aion-DPS-Meter](https://github.com/SkeeveAN/Aion-DPS-Meter)** (MIT) —
   position, zone and movement layouts, map tiles, spawn data and map calibration.
-- **[taengu/A2Tools-DPS-Meter](https://github.com/taengu/A2Tools-DPS-Meter)** (GPL-3.0)
-  — the KDE window-rule approach for overlays above fullscreen games.
 
 Details: [NOTICE](NOTICE) and [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt).
-Game names and art belong to NCSOFT.
+Npcap is not bundled; it is installed separately under its own license. Game names and
+art belong to NCSOFT.
 
 ## License
 
-GPL-3.0-only for the code — see [LICENSE](LICENSE). Game material and third-party
-data are outside that grant.
+GPL-3.0-only for the code — see [LICENSE](LICENSE).

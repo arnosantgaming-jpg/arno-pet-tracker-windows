@@ -4,6 +4,7 @@ using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 
 namespace ArnoA2.App;
 
@@ -47,7 +48,7 @@ public sealed class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var store = AppState.OpenStore();
-            string daemon = Path.Combine(AppContext.BaseDirectory, "capture", "arnoa2-capture");
+            string daemon = Path.Combine(AppContext.BaseDirectory, "capture", OperatingSystem.IsWindows() ? "arnoa2-capture.exe" : "arnoa2-capture");
             state = new AppState(store, File.Exists(daemon) ? daemon : null);
             var maps = new MapHub(state, store.Folder);
             Tracker = new TrackerWindow(state, maps);

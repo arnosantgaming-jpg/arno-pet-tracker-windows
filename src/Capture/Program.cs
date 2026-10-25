@@ -5,6 +5,7 @@ using ArnoA2.Capture;
 using ArnoA2.Protocol;
 
 [assembly: System.Runtime.Versioning.SupportedOSPlatform("linux")]
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows")]
 
 // arnoa2-capture [--socket PATH] [--parent PID] [--read FILE --own-port PORT]
 //   Live (default): capture with cap_net_raw, then drop privileges.
@@ -44,6 +45,7 @@ sealed class Daemon(Options options)
     volatile Stream? client;
     uint nextFlow;
     long segments, dropped;
+    DateTimeOffset lastParentCheck = DateTimeOffset.MinValue;
     string state = "Starting", message = "";
 
     sealed class Flow(uint id, Connection connection)
@@ -56,48 +58,106 @@ sealed class Daemon(Options options)
 
     public int Run()
     {
-        using var source = options.ReadFile is { } file ? PacketSource.File(file) : PacketSource.Live();
-        if (!source.Offline)
-            Privileges.DropAll();
-        // Incoming TCP only; HTTPS and loopback can never be the game connection.
-        const string filter = "tcp and not port 443 and not net 127.0.0.0/8";
+        var sources = options.ReadFile is { } file ? new[] { PacketSource.File(file) } : PacketSource.LiveAll();
+        bool offline = options.ReadFile != null;
         try
         {
-            source.Filter("inbound and " + filter);
-        }
-        catch (IOException)
-        {
-            source.Filter(filter); // capture files without direction information
-        }
+            if (!offline && OperatingSystem.IsLinux())
+                Privileges.DropAll();
+            // Incoming TCP only; HTTPS and loopback can never be the game connection.
+            const string filter = "tcp and not port 443 and not net 127.0.0.0/8";
+            foreach (var source in sources)
+            {
+                try
+                {
+                    source.Filter("inbound and " + filter);
+                }
+                catch (IOException)
+                {
+                    source.Filter(filter); // Windows adapters and capture files lack direction information
+                }
+            }
 
-        Listen();
-        var writer = new Thread(WriteLoop) { IsBackground = true, Name = "channel writer" };
-        writer.Start();
-        state = source.Offline ? "Replaying" : "Capturing";
-        message = source.Offline ? "" : "Privileges dropped: " + Privileges.Current();
-        if (source.Offline)
-            WaitForClient(TimeSpan.FromSeconds(10));
+            Listen();
+            var writer = new Thread(WriteLoop) { IsBackground = true, Name = "channel writer" };
+            writer.Start();
+            state = offline ? "Replaying" : "Capturing";
+            message = offline ? "" : OperatingSystem.IsLinux() ? "Privileges dropped: " + Privileges.Current() : $"Npcap on {sources.Count} adapter(s)";
+            if (offline)
+                Replay(sources[0]);
+            else
+                Capture(sources);
+            Finish(writer);
+            return 0;
+        }
+        finally
+        {
+            foreach (var source in sources)
+                source.Dispose();
+        }
+    }
+
+    /// <summary>A capture file, in order, on this thread.</summary>
+    void Replay(PacketSource source)
+    {
+        WaitForClient(TimeSpan.FromSeconds(10));
         while (true)
         {
             var segment = source.Next(out bool end);
-            var now = segment?.Time ?? DateTimeOffset.UtcNow;
             if (end)
-                break;
+                return;
             if (segment is { } s)
                 Handle(s, s.Time);
             Accept();
-            Housekeeping(source.Offline ? now : DateTimeOffset.UtcNow);
-            if (!source.Offline && ShouldExit())
-                break;
+            Housekeeping(segment?.Time ?? DateTimeOffset.UtcNow);
+        }
+    }
+
+    /// <summary>Live capture: one reader per adapter feeding a queue handled on this thread.</summary>
+    void Capture(IReadOnlyList<PacketSource> sources)
+    {
+        using var queue = new BlockingCollection<Segment>(boundedCapacity: 65536);
+        using var stopping = new CancellationTokenSource();
+        var readers = sources.Select(source => new Thread(() =>
+        {
+            try
+            {
+                while (!stopping.IsCancellationRequested)
+                {
+                    if (source.Next(out bool end) is { } segment && !queue.TryAdd(segment with { Payload = segment.Payload.ToArray() }))
+                        Interlocked.Increment(ref dropped);
+                    if (end)
+                        return;
+                }
+            }
+            catch (IOException ex)
+            {
+                message = $"Capture stopped on {source.Device}: {ex.Message}";
+            }
+        }) { IsBackground = true, Name = "capture " + source.Device }).ToArray();
+        foreach (var reader in readers)
+            reader.Start();
+        while (!ShouldExit())
+        {
+            if (queue.TryTake(out var segment, 100))
+                Handle(segment, segment.Time);
+            Accept();
+            Housekeeping(DateTimeOffset.UtcNow);
         }
 
+        stopping.Cancel();
+        foreach (var source in sources)
+            source.Stop();
+    }
+
+    void Finish(Thread writer)
+    {
         foreach (var flow in flows.Values)
             Send(ChannelKind.FlowClosed, flow.Id, Array.Empty<byte>());
         outbox.CompleteAdding();
         writer.Join(TimeSpan.FromSeconds(5));
         listener?.Dispose();
         File.Delete(options.Socket);
-        return 0;
     }
 
     void Handle(Segment s, DateTimeOffset now)
@@ -228,12 +288,15 @@ sealed class Daemon(Options options)
     {
         string directory = Path.GetDirectoryName(options.Socket)!;
         Directory.CreateDirectory(directory);
-        File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        // Windows: the folder sits in the user's private local app data.
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         if (File.Exists(options.Socket))
             File.Delete(options.Socket); // stale socket from a previous run
         listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         listener.Bind(new UnixDomainSocketEndPoint(options.Socket));
-        File.SetUnixFileMode(options.Socket, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(options.Socket, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         listener.Listen(1);
         listener.Blocking = false;
     }
@@ -304,10 +367,28 @@ sealed class Daemon(Options options)
         client?.Dispose();
     }
 
+    static bool Alive(int pid)
+    {
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById(pid);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
     bool ShouldExit()
     {
-        if (options.Parent is int parent && !Directory.Exists("/proc/" + parent))
-            return true;
+        // Looking a process up is costly; once a second is plenty.
+        if (options.Parent is int parent && DateTimeOffset.UtcNow - lastParentCheck >= TimeSpan.FromSeconds(1))
+        {
+            lastParentCheck = DateTimeOffset.UtcNow;
+            if (!Alive(parent))
+                return true;
+        }
         return client == null && DateTimeOffset.UtcNow - noClientSince > NoClientExit;
     }
 }
