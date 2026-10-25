@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>ArnoA2.App</RootNamespace>
     <AssemblyName>arno-pet-tracker</AssemblyName>
+    <ApplicationIcon>../../assets/icon.ico</ApplicationIcon>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>

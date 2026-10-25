@@ -36,6 +36,7 @@ Runtime dependencies (desktop app)
   licenses/Skia-HarfBuzz-NOTICES.txt); .NET runtime — MIT with third-party notices
   (licenses/NET-LICENSE.txt, licenses/NET-NOTICES.txt).
   libpcap and libcap are provided by the Linux distribution and are not bundled.
+  The Windows installer is built with Velopack (MIT, https://github.com/velopack/velopack).
   On Windows, Npcap (https://npcap.com/) is required and installed separately under
   its own license; it is not redistributed.
 

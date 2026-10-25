@@ -99,5 +99,9 @@ var full = tracker.FullMap!;
 Thread.Sleep(400);
 Save(full, "fullmap.png");
 Check(Text(full).Contains("Best spots"), "full map lists spots");
+var npcap = new NpcapWindow();
+npcap.Show();
+Save(npcap, "npcap.png");
+Check(Text(npcap).Contains("Download Npcap") || npcap.GetVisualDescendants().OfType<Button>().Any(b => Equals(b.Content, "Download Npcap")), "Npcap help window offers the download");
 Console.WriteLine($"{checks} app checks passed; screenshots in {output}");
 

@@ -56,6 +56,8 @@ public sealed class App : Application
             desktop.ShutdownRequested += (_, _) => state.Stop();
             Tracker.Closed += (_, _) => state.Stop();
             state.Start();
+            if (OperatingSystem.IsWindows() && !WindowsSetup.NpcapInstalled)
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => new NpcapWindow().Show(Tracker));
         }
 
         base.OnFrameworkInitializationCompleted();

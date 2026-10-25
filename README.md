@@ -27,18 +27,21 @@ account at risk — read [LEGAL.md](LEGAL.md).
 
 ## Install
 
-1. Install **[Npcap](https://npcap.com/#download)** with its default options. Leave
-   *"Restrict Npcap driver's access to Administrators only"* unticked, or the tracker
-   cannot capture without running as administrator.
-2. Download `arno-pet-tracker-windows.zip` from the
+1. Download **`ArnoPetTracker-win-Setup.exe`** from the
    [latest release](https://github.com/arnosantgaming-jpg/arno-pet-tracker-windows/releases)
-   and unzip it. Windows may warn that the program is unsigned.
-3. In the unzipped `win-x64` folder, right-click `install.ps1` → **Run with PowerShell**
-   (or `powershell -ExecutionPolicy Bypass -File .\install.ps1`). It installs to
-   `%LOCALAPPDATA%\Programs\arno-pet-tracker`, adds a Start menu entry and starts the
-   tracker with Windows (`-NoAutostart` to skip). No administrator rights needed. You
-   can also just run `arno-pet-tracker.exe` from the folder.
-4. Start **Arno's Pet Tracker** before logging into your character.
+   and double-click it. It installs for your user only (no administrator rights) and
+   opens the tracker. Windows may say the publisher is unknown, because the program is
+   not signed: choose **More info → Run anyway**.
+2. The first time, the tracker asks you to install **Npcap**, a free helper it needs to
+   read the game's network messages. Click **Download Npcap**, run that installer with
+   its default options (leave *"Restrict Npcap driver's access to Administrators only"*
+   unticked), then click **Check again**.
+3. Start **Arno's Pet Tracker** from the Start menu before logging into your character.
+   To have it start by itself, open **Settings → Start with Windows**.
+
+Uninstall it like any app: **Settings → Apps → Arno's Pet Tracker → Uninstall**.
+A portable zip (`arno-pet-tracker-windows.zip`, run `arno-pet-tracker.exe`) is also
+provided for people who prefer not to install.
 
 Run AION 2 in **borderless** or **windowed** mode: Windows keeps "always on top"
 windows above those, and the minimap reader can see the game. In exclusive fullscreen
@@ -71,7 +74,9 @@ powershell -ExecutionPolicy Bypass -File tools\build.ps1     # on Windows
 bash tools/build-windows.sh                                   # cross-build from Linux
 ```
 
-Both produce `build\win-x64` and `dist\arno-pet-tracker-windows.zip`. Checks
+Both produce `build\win-x64` and `dist\arno-pet-tracker-windows.zip`. The one-click
+installer is made with [Velopack](https://velopack.io) (`dotnet tool install -g vpk`, then
+`bash tools/package-windows.sh 0.1.0`). Checks
 (`dotnet run --project tests/ProtocolTests`, `TrackerTests`, `CaptureTests`, `AppTests`)
 run on Windows or Linux; the code base still builds for both.
 

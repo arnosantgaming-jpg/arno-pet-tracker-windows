@@ -61,6 +61,7 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(captureNote);
         if (OperatingSystem.IsWindows())
         {
+            panel.Children.Add(Toggle("Start with Windows", WindowsSetup.StartsWithWindows, v => WindowsSetup.StartsWithWindows = v));
             panel.Children.Add(Ui.Note("Capture uses Npcap. Install it from npcap.com with its default options (leave \"Restrict Npcap driver's access to Administrators only\" unticked), then restart the tracker."));
             panel.Children.Add(Ui.Button("Open npcap.com", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://npcap.com/#download") { UseShellExecute = true })?.Dispose()));
         }
