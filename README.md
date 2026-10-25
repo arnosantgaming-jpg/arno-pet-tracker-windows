@@ -4,11 +4,9 @@ The Windows port of [Arno's Pet Tracker](https://github.com/arnosantgaming-jpg/a
 a companion for **AION 2** pet farming: your pet ranks and soul totals, what you are
 farming right now, and where to go next on a live map.
 
-> **Untested on Windows.** This port builds and passes all shared tests, and its
-> Windows capture code has been exercised under Wine, but it has not yet been run on a
-> real Windows PC with the game. Please report what works and what doesn't
-> ([TESTING.md](TESTING.md)). Linux players: use the
-> [Linux repo](https://github.com/arnosantgaming-jpg/arno-pet-tracker).
+> **Status:** confirmed working on Windows by a community tester. Feedback and bug
+> reports are welcome — see [TESTING.md](TESTING.md) for what to include. Linux
+> players: use the [Linux repo](https://github.com/arnosantgaming-jpg/arno-pet-tracker).
 
 Unofficial and not affiliated with NCSOFT. Using third-party tools can put your game
 account at risk — read [LEGAL.md](LEGAL.md).
