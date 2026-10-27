@@ -61,6 +61,15 @@ public sealed class MinimapTracker : IDisposable
         }
     }
 
+    /// <summary>The minimap terrain rectangle in a game window of this size (the minimap
+    /// scales with the UI, which follows the window height).</summary>
+    public static (int X, int Y, int Width, int Height) Area(int width, int height)
+    {
+        double scale = height / 1080.0;
+        int w = (int)Math.Round(AreaWidth * scale), h = (int)Math.Round(AreaHeight * scale);
+        return (width - (int)Math.Round((RightMargin + AreaWidth) * scale), (int)Math.Round(Top * scale), w, h);
+    }
+
     void Step(IGameCapture capture)
     {
         if (seed is not { } s || !WorldMaps.All.TryGetValue(s.Region, out var map))
@@ -72,9 +81,7 @@ public sealed class MinimapTracker : IDisposable
         }
 
         var (width, height) = capture.Size!.Value;
-        double scale = height / 1080.0;
-        int w = (int)Math.Round(AreaWidth * scale), h = (int)Math.Round(AreaHeight * scale);
-        int x = width - (int)Math.Round((RightMargin + AreaWidth) * scale), y = (int)Math.Round(Top * scale);
+        var (x, y, w, h) = Area(width, height);
         var rgb = capture.Read(x, y, w, h);
         if (rgb == null)
         {

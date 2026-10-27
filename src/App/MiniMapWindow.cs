@@ -5,11 +5,14 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
+using ArnoA2.App.Map;
+
 namespace ArnoA2.App;
 
 /// <summary>
-/// Borderless overlay map, round or rectangular: the player in the middle (north up), a
-/// frame with compass marks, and the next farming spot as a line or an arrow on the frame.
+/// Borderless overlay map, round or rectangular: the player in the middle as an arrow
+/// pointing the camera (north up, or turned so the camera points up), a frame with compass
+/// marks, and the next farming spot as a line or an arrow on the frame.
 /// Drag the frame to move it, drag inside to pan; controls appear on hover.
 /// </summary>
 public sealed class MiniMapWindow : Window
@@ -26,6 +29,9 @@ public sealed class MiniMapWindow : Window
     readonly MarqueeText guidance = new() { FontSize = 11.5, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly Border grip;
     readonly Button shapeButton;
+    readonly Button turnButton;
+    CameraHeading? camera;
+    IDisposable? ticking;
     readonly Border label;
     bool sizing;
 
@@ -58,6 +64,9 @@ public sealed class MiniMapWindow : Window
         };
 
         shapeButton = Small("◯", "Switch between circle and rectangle", ToggleShape);
+        turnButton = Small("N", "", ToggleTurn);
+        canvas.TurnMap = preferences.MiniTurn;
+        ShowTurn();
         foreach (var button in new[]
         {
             Small("−", "Zoom out", () => canvas.ZoomAt(null, 0.8)),
@@ -73,6 +82,7 @@ public sealed class MiniMapWindow : Window
                     hub.TargetSpot = (hub.TargetSpot + 1) % hub.Hotspots.Count;
                 Update();
             }),
+            turnButton,
             shapeButton,
             Small("✕", "Close the mini-map", Close)
         })
@@ -132,6 +142,7 @@ public sealed class MiniMapWindow : Window
         {
             hub.Attach();
             Update();
+            FollowCamera();
         };
         Closing += (_, _) =>
         {
@@ -143,6 +154,7 @@ public sealed class MiniMapWindow : Window
         };
         Closed += (_, _) =>
         {
+            StopCamera();
             hub.Changed -= Update;
             hub.Detach();
         };
@@ -155,6 +167,76 @@ public sealed class MiniMapWindow : Window
         ApplyShape(!Round);
         hub.Preferences.MiniShape = Round ? "Round" : "Rectangle";
         hub.Save();
+    }
+
+    public MapCanvas Canvas => canvas;
+
+    void ToggleTurn()
+    {
+        canvas.TurnMap = hub.Preferences.MiniTurn = !canvas.TurnMap;
+        hub.Save();
+        ShowTurn();
+        ApplyTurn();
+    }
+
+    /// <summary>The button shows the current mode: N (north up) or ↻ (turns with the camera).</summary>
+    void ShowTurn()
+    {
+        turnButton.Content = canvas.TurnMap ? "↻" : "N";
+        ToolTip.SetTip(turnButton, (canvas.TurnMap ? "Turning with the camera · click for north up" : "North up · click to turn with the camera")
+            + (camera?.Status is { } status ? "\n" + status : ""));
+    }
+
+    /// <summary>Moves the frame's compass marks with north and redraws the map.</summary>
+    void ApplyTurn()
+    {
+        frame.Turned = canvas.Turned;
+        frame.InvalidateVisual();
+        canvas.InvalidateVisual();
+    }
+
+    /// <summary>Reads your camera direction from the game's minimap while the mini-map is open,
+    /// and eases the shown direction toward each reading every frame, so turning is smooth.</summary>
+    void FollowCamera()
+    {
+        camera = new CameraHeading();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        double last = 0;
+        string? status = null;
+        ticking = Avalonia.Threading.DispatcherTimer.Run(() =>
+        {
+            double now = clock.Elapsed.TotalSeconds, dt = now - last;
+            last = now;
+            double? shown = canvas.Heading, next = CameraHeading.Ease(shown, camera?.Degrees, dt);
+            if (camera?.Status != status)
+            {
+                status = camera?.Status;
+                ShowTurn();
+            }
+
+            if ((next == null) != (shown == null) || (next is double a && shown is double b && Math.Abs(CameraHeading.Wrap(a - b)) > 0.05))
+            {
+                canvas.Heading = next;
+                ApplyTurn();
+            }
+
+            return camera != null;
+        }, TimeSpan.FromMilliseconds(16));
+    }
+
+    /// <summary>Stops reading the camera (tests set <see cref="MapCanvas.Heading"/> themselves).</summary>
+    public void StopCamera()
+    {
+        ticking?.Dispose();
+        camera?.Dispose();
+        (ticking, camera) = (null, null);
+    }
+
+    /// <summary>Applies a heading at once, as the camera timer does (for tests).</summary>
+    public void ShowHeading(double? degrees)
+    {
+        canvas.Heading = degrees;
+        ApplyTurn();
     }
 
     public void ApplyShape(bool round)
@@ -236,6 +318,8 @@ public sealed class MiniMapWindow : Window
         static readonly IPen Shadow = new Pen(Brush.Parse("#80000000"), 3);
         static readonly Typeface Face = new("Noto Sans", FontStyle.Normal, FontWeight.Bold);
         public bool Round { get; set; } = true;
+        /// <summary>Degrees the map is turned anticlockwise: the marks move with north.</summary>
+        public double Turned { get; set; }
 
         /// <summary>Only the frame band takes the pointer; the map inside keeps panning and clicks.</summary>
         public bool HitTest(Point p)
@@ -281,15 +365,16 @@ public sealed class MiniMapWindow : Window
             {
                 if (deg % 90 == 0)
                     continue;
-                double a = deg * Math.PI / 180;
+                double a = (deg - Turned) * Math.PI / 180;
                 context.DrawLine(Gold, new Point(c.X + Math.Sin(a) * (r - Frame + 3), c.Y - Math.Cos(a) * (r - Frame + 3)), new Point(c.X + Math.Sin(a) * (r - 4), c.Y - Math.Cos(a) * (r - 4)));
             }
 
             double mid = r - Frame / 2;
-            Letter(context, "N", new Point(c.X, c.Y - mid));
-            Letter(context, "E", new Point(c.X + mid, c.Y));
-            Letter(context, "S", new Point(c.X, c.Y + mid));
-            Letter(context, "W", new Point(c.X - mid, c.Y));
+            foreach (var (text, deg) in Compass)
+            {
+                double a = (deg - Turned) * Math.PI / 180;
+                Letter(context, text, new Point(c.X + Math.Sin(a) * mid, c.Y - Math.Cos(a) * mid));
+            }
         }
 
         void RenderRectangle(DrawingContext context)
@@ -308,12 +393,17 @@ public sealed class MiniMapWindow : Window
             context.DrawRectangle(null, Shadow, inner.Inflate(1), 8, 8);
             context.DrawRectangle(null, Gold, outer.Deflate(0.5), 12, 12);
             context.DrawRectangle(null, Gold, inner, 8, 8);
-            double half = Frame / 2;
-            Letter(context, "N", new Point(Bounds.Width / 2, half));
-            Letter(context, "E", new Point(Bounds.Width - half, Bounds.Height / 2));
-            Letter(context, "S", new Point(Bounds.Width / 2, Bounds.Height - half));
-            Letter(context, "W", new Point(half, Bounds.Height / 2));
+            // Each letter where its direction from the middle crosses the middle of the band.
+            double half = Frame / 2, rx = Bounds.Width / 2 - half, ry = Bounds.Height / 2 - half;
+            foreach (var (text, deg) in Compass)
+            {
+                double a = (deg - Turned) * Math.PI / 180, dx = Math.Sin(a), dy = -Math.Cos(a);
+                double t = Math.Min(Math.Abs(dx) < 1e-9 ? double.MaxValue : rx / Math.Abs(dx), Math.Abs(dy) < 1e-9 ? double.MaxValue : ry / Math.Abs(dy));
+                Letter(context, text, new Point(Bounds.Width / 2 + dx * t, Bounds.Height / 2 + dy * t));
+            }
         }
+
+        static readonly (string Text, double Degrees)[] Compass = { ("N", 0), ("E", 90), ("S", 180), ("W", 270) };
 
         static void Letter(DrawingContext context, string text, Point at)
         {

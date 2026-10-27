@@ -19,6 +19,8 @@ public sealed class MapPreferences
     public bool ShowAllSpawns { get; set; } = true;
     /// <summary>Mini-map shape: "Round" or "Rectangle".</summary>
     public string MiniShape { get; set; } = "Round";
+    /// <summary>Mini-map turns with your camera (the camera direction points up) instead of north up.</summary>
+    public bool MiniTurn { get; set; }
     public string? LastRegion { get; set; } = "verteron";
     public bool ReadMinimap { get; set; } = true;
     /// <summary>Tile pixels per minimap pixel, found by calibration (null = calibrate).</summary>

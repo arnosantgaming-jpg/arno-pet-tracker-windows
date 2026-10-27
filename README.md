@@ -20,6 +20,8 @@ account at risk — read [LEGAL.md](LEGAL.md).
 - **Black Cloud Merchant:** offers worth buying for pets you have not maxed.
 - **Live map:** a mini-map (circle or rectangle) and a full map (Verteron, Altgard)
   with your position, pet spawns and the best farming spots for what you still need.
+  Your marker is an arrow pointing your camera, read from the view cone on the in-game
+  minimap; the mini-map can turn with it (hover → N / ↻) or stay north up.
 - **No relog needed:** started mid-session it recognises your character; one login
   with the tracker running syncs exact soul totals.
 

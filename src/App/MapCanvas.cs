@@ -44,12 +44,35 @@ public sealed class MapCanvas : Control
     public double Zoom { get; set; } = 3;
     public double TileOpacity { get; set; } = 1;
     public (double X, double Y) Center { get; set; }
+    /// <summary>Your camera direction, degrees clockwise from north (null = unknown): the
+    /// player marker becomes an arrow pointing it.</summary>
+    public double? Heading { get; set; }
+    /// <summary>Turns the map so the camera direction points up (north up while unknown).</summary>
+    public bool TurnMap { get; set; }
+    /// <summary>Degrees the map is turned anticlockwise; north sits this far left of up.</summary>
+    public double Turned => TurnMap && Heading is double h ? h : 0;
     public event Action? ViewChanged;
     // Pixels per whole-region unit: each tile is drawn at 256 * Zoom px (about 4 m per px at Zoom 1).
     double Pixels => Zoom * 256 * hub.Map.Grid;
 
-    Point Screen(double x, double y) => new(Bounds.Width / 2 + (x - Center.X) * Pixels, Bounds.Height / 2 + (y - Center.Y) * Pixels);
-    (double X, double Y) Region(Point p) => (Center.X + (p.X - Bounds.Width / 2) / Pixels, Center.Y + (p.Y - Bounds.Height / 2) / Pixels);
+    Point Middle => new(Bounds.Width / 2, Bounds.Height / 2);
+
+    /// <summary>Region units to screen: offset from the centre, scaled, then turned about the middle.</summary>
+    public Point Screen(double x, double y) => Middle + Turn(new Vector((x - Center.X) * Pixels, (y - Center.Y) * Pixels), -Turned);
+
+    /// <summary>Screen to region units: the inverse of <see cref="Screen"/>.</summary>
+    public (double X, double Y) Region(Point p)
+    {
+        var v = Turn(p - Middle, Turned);
+        return (Center.X + v.X / Pixels, Center.Y + v.Y / Pixels);
+    }
+
+    /// <summary>A screen vector turned clockwise by the given degrees (y points down).</summary>
+    static Vector Turn(Vector v, double degrees)
+    {
+        double a = degrees * Math.PI / 180, cos = Math.Cos(a), sin = Math.Sin(a);
+        return new Vector(v.X * cos - v.Y * sin, v.X * sin + v.Y * cos);
+    }
 
     void Animate()
     {
@@ -98,12 +121,19 @@ public sealed class MapCanvas : Control
         var map = hub.Map;
         var region = hub.Spawns;
         double cell = Pixels / map.Grid;
+        // Tiles are laid out north up and the whole layer is turned about the middle; any tile
+        // within the view's diagonal may turn into sight.
+        var middle = Middle;
+        double reach = Math.Sqrt(bounds.Width * bounds.Width + bounds.Height * bounds.Height) / 2;
+        var seen = Turned == 0 ? bounds : new Rect(middle.X - reach, middle.Y - reach, 2 * reach, 2 * reach);
+        var turn = Matrix.CreateTranslation(-middle.X, -middle.Y) * Matrix.CreateRotation(-Turned * Math.PI / 180) * Matrix.CreateTranslation(middle.X, middle.Y);
         using (context.PushOpacity(TileOpacity))
+        using (context.PushTransform(turn))
             foreach (var tile in region.Tiles)
             {
-                var start = Screen((double)tile.Column / map.Grid, (double)tile.Row / map.Grid);
+                var start = new Point(middle.X + ((double)tile.Column / map.Grid - Center.X) * Pixels, middle.Y + ((double)tile.Row / map.Grid - Center.Y) * Pixels);
                 var rect = new Rect(start, new Size(cell + 0.5, cell + 0.5));
-                if (rect.Intersects(bounds) && Tile(region.Key, tile.Column, tile.Row) is { } image)
+                if (rect.Intersects(seen) && Tile(region.Key, tile.Column, tile.Row) is { } image)
                     context.DrawImage(image, new Rect(image.Size), rect);
             }
 
@@ -148,7 +178,6 @@ public sealed class MapCanvas : Control
                 context.DrawLine(RoutePen, at, end);
                 if (Round)
                 {
-                    var middle = new Point(bounds.Width / 2, bounds.Height / 2);
                     double edge = Math.Min(bounds.Width, bounds.Height) / 2 - 16;
                     if (Distance(end, middle) > edge)
                         RoundEdgeArrow(context, at, end, middle, edge);
@@ -160,15 +189,42 @@ public sealed class MapCanvas : Control
             bool exact = hub.Precise;
             if (!exact)
                 context.DrawEllipse(Brush.Parse("#224FC3F7"), new Pen(Brush.Parse("#664FC3F7"), 1), at, Math.Max(10 / map.Metres * Pixels, 12), Math.Max(10 / map.Metres * Pixels, 12));
-            // A plain dot: the network gives no facing, and a heading guessed from movement
-            // spun around on every small correction.
-            // White centre and thick blue ring keep it distinct from the coloured mob dots.
             context.DrawEllipse(Brush.Parse("#554FC3F7"), null, at, 14, 14);
-            context.DrawEllipse(Brushes.White, new Pen(Brush.Parse("#0B1118"), 1), at, 9, 9);
-            context.DrawEllipse(Brushes.White, new Pen(Player, 3.5), at, 6, 6);
+            if (Heading is double facing)
+                // An arrow pointing where the camera looks (read from the game's minimap cone;
+                // the network gives no facing). Up when the map turns with it.
+                Facing(context, at, facing - Turned);
+            else
+            {
+                // A plain dot while the camera is not read; a heading guessed from movement
+                // spun around on every small correction.
+                // White centre and thick blue ring keep it distinct from the coloured mob dots.
+                context.DrawEllipse(Brushes.White, new Pen(Brush.Parse("#0B1118"), 1), at, 9, 9);
+                context.DrawEllipse(Brushes.White, new Pen(Player, 3.5), at, 6, 6);
+            }
         }
         else if (Minimap)
             Label(context, hub.Live == null ? "Connecting…" : Round ? "Position unknown" : "Position unknown · use a skill or relog", new Point(bounds.Width / 2, bounds.Height / 2), 12, Brushes.White, Brush.Parse("#AA000000"));
+    }
+
+    /// <summary>The player arrow: blue with a white rim, pointing the given degrees clockwise from up.</summary>
+    static void Facing(DrawingContext context, Point at, double degrees)
+    {
+        var shape = new StreamGeometry();
+        using (var g = shape.Open())
+        {
+            g.BeginFigure(new Point(0, -12), true);
+            g.LineTo(new Point(8.5, 8));
+            g.LineTo(new Point(0, 3.5));
+            g.LineTo(new Point(-8.5, 8));
+            g.EndFigure(true);
+        }
+
+        using (context.PushTransform(Matrix.CreateRotation(degrees * Math.PI / 180) * Matrix.CreateTranslation(at.X, at.Y)))
+        {
+            context.DrawGeometry(null, new Pen(Brush.Parse("#0B1118"), 4.5) { LineJoin = PenLineJoin.Round }, shape);
+            context.DrawGeometry(Player, new Pen(Brushes.White, 2) { LineJoin = PenLineJoin.Round }, shape);
+        }
     }
 
     static double Distance(Point a, Point b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
@@ -254,7 +310,9 @@ public sealed class MapCanvas : Control
         if (drag is not { } start)
             return;
         var point = e.GetPosition(this);
-        Center = (Center.X - (point.X - start.X) / Pixels, Center.Y - (point.Y - start.Y) / Pixels);
+        // Through Region, so the map follows the pointer when it is turned too.
+        var (from, to) = (Region(start), Region(point));
+        Center = (Center.X + from.X - to.X, Center.Y + from.Y - to.Y);
         drag = point;
         if (Follow)
         {
@@ -281,7 +339,7 @@ public sealed class MapCanvas : Control
 
     public void ZoomAt(Point? anchor, double factor)
     {
-        var point = anchor ?? new Point(Bounds.Width / 2, Bounds.Height / 2);
+        var point = anchor ?? Middle;
         var before = Region(point);
         Zoom = Math.Clamp(Zoom * factor, 0.15, 24);
         if (!Follow)
