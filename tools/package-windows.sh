@@ -5,7 +5,7 @@
 set -euo pipefail
 export DOTNET_ROOT="${DOTNET_ROOT:-$HOME/.dotnet}" PATH="$HOME/.dotnet:$HOME/.dotnet/tools:$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-version="${1:-1.0.2}"
+version="${1:-1.0.3}"
 command -v vpk >/dev/null || { echo "Velopack's vpk tool is missing. Install it with: dotnet tool install -g vpk" >&2; exit 1; }
 bash "$root/tools/build-windows.sh"
 rm -rf -- "$root/dist/installer"
